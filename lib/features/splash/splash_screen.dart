@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:layanan_masyarakat3t/features/home/home_screen.dart';
+import 'package:layanan_masyarakat3t/features/auth/auth_screen.dart';
 import 'package:layanan_masyarakat3t/features/splash/widgets/g_snake_painter.dart';
 import 'package:layanan_masyarakat3t/features/splash/widgets/typewriter_text.dart';
 
@@ -98,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const HomeScreen(),
+            const AuthScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },

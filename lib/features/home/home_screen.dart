@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:layanan_masyarakat3t/features/auth/auth_screen.dart';
 import 'package:layanan_masyarakat3t/features/splash/splash_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -59,6 +60,19 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const SplashScreen()),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Halaman Masuk / Registrasi',
+            icon: const Icon(
+              Icons.person_outline,
+              color: Color(0xFFE2E8F0),
+              size: 20,
+            ),
+            onPressed: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const AuthScreen()),
               );
             },
           ),
