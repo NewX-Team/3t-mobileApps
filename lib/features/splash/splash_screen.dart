@@ -300,15 +300,28 @@ class _SplashScreenState extends State<SplashScreen>
                   final opacity = (1.0 - _outAnimation.value).clamp(0.0, 1.0);
                   return Opacity(opacity: opacity, child: child);
                 },
-                child: const Text(
-                  'Kementerian & Pemerintah Daerah Wilayah 3T',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.2,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.copyright,
+                      size: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Hak Milik & Dilisensikan kepada Noxei Indonesia Branch',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
