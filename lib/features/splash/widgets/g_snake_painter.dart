@@ -3,22 +3,32 @@ import 'package:flutter/material.dart';
 
 /// CustomPainter that renders a geometric letter 'G'.
 ///
-/// During the entrance animation, a stylized snake icon moves along the 'G' path,
-/// drawing the letter stroke behind it. The snake undulates subtly while in motion,
-/// flicking a tiny tongue, and cleanly settles once the 'G' path completes.
+/// Handles both:
+/// 1. Entrance: A precision kinetic head enters from the top-right opening and
+///    draws the 'G' inward into the central crossbar.
+/// 2. Exit: The kinetic head reverses direction at the crossbar and travels
+///    backwards in the opposite direction, retracting/un-drawing the 'G'
+///    until it completely exits at the top-right opening.
+///
+/// Designed with ultra-clean, professional civic-tech aesthetics (no green dots,
+/// no cartoon elements, no gradients, no purple).
 class GSnakePainter extends CustomPainter {
-  final double progress;
+  final double entranceProgress;
+  final double exitProgress;
+  final bool isExiting;
   final Color strokeColor;
-  final Color snakeColor;
+  final Color headColor;
   final Color trackColor;
   final double strokeWidth;
 
   const GSnakePainter({
-    required this.progress,
+    required this.entranceProgress,
+    this.exitProgress = 0.0,
+    this.isExiting = false,
     this.strokeColor = const Color(0xFFFFFFFF),
-    this.snakeColor = const Color(0xFF10B981),
+    this.headColor = const Color(0xFFFFFFFF),
     this.trackColor = const Color(0xFF1E293B),
-    this.strokeWidth = 11.0,
+    this.strokeWidth = 12.0,
   });
 
   /// Builds a clean, geometric uppercase 'G' path as a single continuous contour.
@@ -56,131 +66,139 @@ class GSnakePainter extends CustomPainter {
     final totalLength = metric.length;
 
     // 1. Draw subtle background track (guide path)
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, trackPaint);
-
-    final clampedProgress = progress.clamp(0.0, 1.0);
-    final currentDistance = totalLength * clampedProgress;
-
-    // 2. Draw the solid stroke laid down by the snake
-    if (currentDistance > 0.0) {
-      final solidStrokePaint = Paint()
-        ..color = strokeColor
+    final double trackOpacity = isExiting
+        ? (1.0 - exitProgress).clamp(0.0, 1.0)
+        : 1.0;
+    if (trackOpacity > 0.0) {
+      final trackPaint = Paint()
+        ..color = trackColor.withAlpha((trackOpacity * 255).round().clamp(0, 255))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
+        ..strokeWidth = 2.0
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
-
-      final drawnPath = metric.extractPath(0.0, currentDistance);
-      canvas.drawPath(drawnPath, solidStrokePaint);
+      canvas.drawPath(path, trackPaint);
     }
 
-    // 3. Draw the active snake body & head while the animation is progressing
-    if (clampedProgress > 0.001 && clampedProgress < 0.999) {
-      final tangent = metric.getTangentForOffset(currentDistance);
-      if (tangent != null) {
-        final forwardVec = tangent.vector;
-        final normalVec = Offset(-forwardVec.dy, forwardVec.dx);
+    if (!isExiting) {
+      // -----------------------------------------------------------------
+      // ENTRANCE ANIMATION (0.0 -> 1.0)
+      // Head enters from top-right and draws G inward to the center
+      // -----------------------------------------------------------------
+      final clampedProgress = entranceProgress.clamp(0.0, 1.0);
+      final currentDistance = totalLength * clampedProgress;
 
-        // Snake body segment trailing directly behind the head (last 36 pixels)
-        final bodyStartDistance = math.max(0.0, currentDistance - 36.0);
-        final snakeBodyPath = metric.extractPath(bodyStartDistance, currentDistance);
-
-        final snakeBodyPaint = Paint()
-          ..color = snakeColor
+      if (currentDistance > 0.0) {
+        final solidStrokePaint = Paint()
+          ..color = strokeColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round;
 
-        canvas.drawPath(snakeBodyPath, snakeBodyPaint);
+        final drawnPath = metric.extractPath(0.0, currentDistance);
+        canvas.drawPath(drawnPath, solidStrokePaint);
+      }
 
-        // Gentle slither wiggle: subtle lateral oscillation that dampens to zero near end
-        final wiggle = (clampedProgress < 0.90)
-            ? math.sin(clampedProgress * math.pi * 14.0) * 2.2 * (1.0 - clampedProgress)
-            : 0.0;
-        final effectiveHeadPos = tangent.position + (normalVec * wiggle);
+      if (clampedProgress > 0.001 && clampedProgress < 0.999) {
+        final tangent = metric.getTangentForOffset(currentDistance);
+        if (tangent != null) {
+          final forwardVec = tangent.vector;
+          final normalVec = Offset(-forwardVec.dy, forwardVec.dx);
 
-        // Draw the snake head icon aligned with the path's tangent angle
-        canvas.save();
-        canvas.translate(effectiveHeadPos.dx, effectiveHeadPos.dy);
-        canvas.rotate(tangent.angle);
+          // Subtle kinetic wiggle that dampens as it finishes
+          final wiggle = (clampedProgress < 0.90)
+              ? math.sin(clampedProgress * math.pi * 14.0) * 1.8 * (1.0 - clampedProgress)
+              : 0.0;
+          final effectiveHeadPos = tangent.position + (normalVec * wiggle);
 
-        _drawSnakeHead(canvas, clampedProgress);
+          canvas.save();
+          canvas.translate(effectiveHeadPos.dx, effectiveHeadPos.dy);
+          canvas.rotate(tangent.angle);
 
-        canvas.restore();
+          _drawKineticHead(canvas);
+
+          canvas.restore();
+        }
+      }
+    } else {
+      // -----------------------------------------------------------------
+      // EXIT ANIMATION (Opposite direction: Center -> Top-Right)
+      // Head starts at the center crossbar and moves in the reverse direction,
+      // un-drawing the stroke until it exits at the top-right opening.
+      // -----------------------------------------------------------------
+      final clampedExit = exitProgress.clamp(0.0, 1.0);
+      final remainingDistance = totalLength * (1.0 - clampedExit);
+
+      if (remainingDistance > 0.0) {
+        final solidStrokePaint = Paint()
+          ..color = strokeColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
+
+        final drawnPath = metric.extractPath(0.0, remainingDistance);
+        canvas.drawPath(drawnPath, solidStrokePaint);
+      }
+
+      // During exit, the kinetic head leads the retraction at remainingDistance,
+      // facing the REVERSE direction (tangent.angle + pi)
+      if (clampedExit > 0.001 && clampedExit < 0.999 && remainingDistance > 0.0) {
+        final tangent = metric.getTangentForOffset(remainingDistance);
+        if (tangent != null) {
+          final forwardVec = tangent.vector;
+          // Normal vector for reverse movement
+          final normalVec = Offset(forwardVec.dy, -forwardVec.dx);
+
+          final wiggle = math.sin(clampedExit * math.pi * 12.0) * 1.6 * (1.0 - clampedExit);
+          final effectiveHeadPos = tangent.position + (normalVec * wiggle);
+
+          canvas.save();
+          canvas.translate(effectiveHeadPos.dx, effectiveHeadPos.dy);
+          // Rotate 180 degrees so head faces the direction of reverse travel
+          canvas.rotate(tangent.angle + math.pi);
+
+          _drawKineticHead(canvas);
+
+          canvas.restore();
+        }
       }
     }
   }
 
-  /// Draws a sleek, non-slop geometric snake head with eyes and tongue.
-  void _drawSnakeHead(Canvas canvas, double p) {
-    // 1. Head shape (solid rounded shield/oval)
+  /// Draws a clean, professional geometric kinetic head.
+  /// (Strictly no green, no cartoon eyes, no tongue).
+  void _drawKineticHead(Canvas canvas) {
+    // 1. Sleek aerodynamic capsule head in solid white
     final headPaint = Paint()
-      ..color = snakeColor
+      ..color = headColor
       ..style = PaintingStyle.fill;
 
     final headRect = RRect.fromRectAndRadius(
-      const Rect.fromCenter(center: Offset(1.5, 0), width: 17.0, height: 13.0),
-      const Radius.circular(6.5),
+      Rect.fromCenter(center: const Offset(1.0, 0), width: 17.0, height: 12.0),
+      const Radius.circular(6.0),
     );
     canvas.drawRRect(headRect, headPaint);
 
-    // 2. Eyes (two sleek, high-contrast dots)
-    final eyeBasePaint = Paint()
-      ..color = const Color(0xFF0B132B)
+    // 2. High-precision dark inset core for a mature, executive look
+    final coreOuterPaint = Paint()
+      ..color = const Color(0xFF0F172A)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(const Offset(3.5, -3.2), 1.7, eyeBasePaint);
-    canvas.drawCircle(const Offset(3.5, 3.2), 1.7, eyeBasePaint);
+    canvas.drawCircle(const Offset(2.0, 0), 2.2, coreOuterPaint);
 
-    final eyePupilPaint = Paint()
+    final coreCenterPaint = Paint()
       ..color = const Color(0xFFFFFFFF)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(const Offset(4.0, -3.2), 0.7, eyePupilPaint);
-    canvas.drawCircle(const Offset(4.0, 3.2), 0.7, eyePupilPaint);
-
-    // 3. Snake tongue (subtle flick while in motion, retracts before arriving)
-    if (p > 0.12 && p < 0.88) {
-      final tongueCycle = math.sin(p * 45.0);
-      if (tongueCycle > 0.0) {
-        final tonguePaint = Paint()
-          ..color = const Color(0xFFEF4444)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.3
-          ..strokeCap = StrokeCap.round;
-
-        final tongueLength = 4.0 * tongueCycle;
-        // Tongue stem
-        canvas.drawLine(
-          const Offset(10.0, 0),
-          Offset(10.0 + tongueLength, 0),
-          tonguePaint,
-        );
-        // Forked tips
-        canvas.drawLine(
-          Offset(10.0 + tongueLength, 0),
-          Offset(10.0 + tongueLength + 2.0, -1.8),
-          tonguePaint,
-        );
-        canvas.drawLine(
-          Offset(10.0 + tongueLength, 0),
-          Offset(10.0 + tongueLength + 2.0, 1.8),
-          tonguePaint,
-        );
-      }
-    }
+    canvas.drawCircle(const Offset(2.0, 0), 0.9, coreCenterPaint);
   }
 
   @override
   bool shouldRepaint(covariant GSnakePainter oldDelegate) {
-    return oldDelegate.progress != progress ||
+    return oldDelegate.entranceProgress != entranceProgress ||
+        oldDelegate.exitProgress != exitProgress ||
+        oldDelegate.isExiting != isExiting ||
         oldDelegate.strokeColor != strokeColor ||
-        oldDelegate.snakeColor != snakeColor ||
+        oldDelegate.headColor != headColor ||
         oldDelegate.trackColor != trackColor ||
         oldDelegate.strokeWidth != strokeWidth;
   }

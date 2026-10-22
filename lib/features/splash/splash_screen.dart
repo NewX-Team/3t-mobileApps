@@ -15,8 +15,8 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _inAnimation;
 
   late final AnimationController _outController;
+  late final Animation<double> _outAnimation;
   late final Animation<Offset> _outSlideAnimation;
-  late final Animation<double> _outFadeAnimation;
 
   // Title fade-in animation, which appears as the G is nearly complete
   late final Animation<double> _titleFadeAnimation;
@@ -25,10 +25,10 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // 1. Entrance animation (Snake slithers to form the letter G)
+    // 1. Entrance animation (Head moves along path from top-right to center)
     _inController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1900),
+      duration: const Duration(milliseconds: 1800),
     );
 
     _inAnimation = CurvedAnimation(
@@ -41,29 +41,25 @@ class _SplashScreenState extends State<SplashScreen>
       curve: const Interval(0.65, 1.0, curve: Curves.easeOut),
     );
 
-    // 2. Exit animation (The letter G slides downward and fades away)
+    // 2. Exit animation (Retraces path in reverse from center outwards, un-drawing the G)
     _outController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 1300),
     );
 
+    _outAnimation = CurvedAnimation(
+      parent: _outController,
+      curve: Curves.easeInOutCubic,
+    );
+
+    // Subtle downward drift during exit
     _outSlideAnimation = Tween<Offset>(
       begin: Offset.zero,
-      end: const Offset(0.0, 0.45),
+      end: const Offset(0.0, 0.12),
     ).animate(
       CurvedAnimation(
         parent: _outController,
-        curve: Curves.easeInCubic,
-      ),
-    );
-
-    _outFadeAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _outController,
-        curve: Curves.easeInCubic,
+        curve: Curves.easeInOutCubic,
       ),
     );
 
@@ -84,11 +80,11 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _onEntranceCompleted() async {
-    // Brief pause to display the completed G icon and title
+    // Brief hold to display the fully formed G mark and identity
     await Future.delayed(const Duration(milliseconds: 650));
     if (!mounted) return;
 
-    // Start downward exit animation
+    // Start reverse exit animation
     _outController.forward();
   }
 
@@ -102,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen>
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
-        transitionDuration: const Duration(milliseconds: 400),
+        transitionDuration: const Duration(milliseconds: 350),
       ),
     );
   }
@@ -128,121 +124,120 @@ class _SplashScreenState extends State<SplashScreen>
             Center(
               child: SlideTransition(
                 position: _outSlideAnimation,
-                child: FadeTransition(
-                  opacity: _outFadeAnimation,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // The G Snake Custom Painter
-                      AnimatedBuilder(
-                        animation: _inAnimation,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            size: const Size(160, 160),
-                            painter: GSnakePainter(
-                              progress: _inAnimation.value,
-                              strokeColor: const Color(0xFFFFFFFF),
-                              snakeColor: const Color(0xFF10B981),
-                              trackColor: const Color(0xFF1E293B),
-                              strokeWidth: 12.0,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 36),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The G Snake / Kinetic Painter (Entrance & Reverse Exit)
+                    AnimatedBuilder(
+                      animation: Listenable.merge([_inAnimation, _outAnimation]),
+                      builder: (context, child) {
+                        final isExiting = _outController.value > 0.0;
+                        return CustomPaint(
+                          size: const Size(160, 160),
+                          painter: GSnakePainter(
+                            entranceProgress: _inAnimation.value,
+                            exitProgress: _outAnimation.value,
+                            isExiting: isExiting,
+                            strokeColor: const Color(0xFFFFFFFF),
+                            headColor: const Color(0xFFFFFFFF),
+                            trackColor: const Color(0xFF1E293B),
+                            strokeWidth: 12.0,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 36),
 
-                      // Text info that fades in as the G finishes forming
-                      AnimatedBuilder(
-                        animation: _titleFadeAnimation,
-                        builder: (context, child) {
-                          return Opacity(
-                            opacity: _titleFadeAnimation.value,
-                            child: child,
-                          );
-                        },
-                        child: Column(
-                          children: [
-                            const Text(
-                              'LAYANAN MASYARAKAT 3T',
-                              style: TextStyle(
-                                color: Color(0xFFF8FAFC),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 2.2,
+                    // Text & metadata that fades in on entrance, fades out on exit
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _titleFadeAnimation,
+                        _outAnimation,
+                      ]),
+                      builder: (context, child) {
+                        final inOpacity = _titleFadeAnimation.value;
+                        final outOpacity = (1.0 - _outAnimation.value).clamp(0.0, 1.0);
+                        final effectiveOpacity = (inOpacity * outOpacity).clamp(0.0, 1.0);
+
+                        return Opacity(
+                          opacity: effectiveOpacity,
+                          child: child,
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          const Text(
+                            'LAYANAN MASYARAKAT 3T',
+                            style: TextStyle(
+                              color: Color(0xFFF8FAFC),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Sistem Pelayanan Terpadu & Tanggap Darurat',
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Clean, professional civic badge (strictly no green dots!)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF334155),
+                                width: 1.0,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Sistem Informasi & Pelayanan Publik Mandiri',
+                            child: const Text(
+                              'TERDEPAN • TERLUAR • TERTINGGAL',
                               style: TextStyle(
                                 color: Color(0xFF94A3B8),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.5,
                               ),
                             ),
-                            const SizedBox(height: 20),
-
-                            // Civic offline indicator pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: const Color(0xFF334155),
-                                  width: 1.0,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF10B981),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Siap Beroperasi Tanpa Sinyal',
-                                    style: TextStyle(
-                                      color: Color(0xFFCBD5E1),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
-            // Footer info
+            // Subtle footer metadata
             Positioned(
               bottom: 16,
               left: 0,
               right: 0,
-              child: FadeTransition(
-                opacity: _outFadeAnimation,
+              child: AnimatedBuilder(
+                animation: _outAnimation,
+                builder: (context, child) {
+                  final opacity = (1.0 - _outAnimation.value).clamp(0.0, 1.0);
+                  return Opacity(opacity: opacity, child: child);
+                },
                 child: const Text(
-                  'Aplikasi Layanan Wilayah Terdepan, Terluar, Tertinggal',
+                  'Kementerian & Pemerintah Daerah Wilayah 3T',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Color(0xFF64748B),
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ),

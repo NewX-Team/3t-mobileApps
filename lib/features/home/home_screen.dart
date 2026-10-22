@@ -81,13 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
+                    color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: const Icon(
-                    Icons.offline_pin_outlined,
-                    color: accentColor,
+                    Icons.cloud_done_outlined,
+                    color: Color(0xFF0F172A),
                     size: 22,
                   ),
                 ),
