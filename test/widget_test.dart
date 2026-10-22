@@ -10,8 +10,8 @@ void main() {
     // Verify SplashScreen is loaded
     expect(find.byType(SplashScreen), findsOneWidget);
 
-    // Pump frames to advance animation
-    await tester.pump(const Duration(milliseconds: 500));
+    // Pump frames to advance typewriter animation to completion
+    await tester.pump(const Duration(milliseconds: 2000));
     expect(find.text('LAYANAN MASYARAKAT 3T'), findsOneWidget);
   });
 }

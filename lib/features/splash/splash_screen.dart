@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:layanan_masyarakat3t/features/home/home_screen.dart';
 import 'package:layanan_masyarakat3t/features/splash/widgets/g_snake_painter.dart';
+import 'package:layanan_masyarakat3t/features/splash/widgets/typewriter_text.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,6 +12,10 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
+  static const String _fullTitle = 'LAYANAN MASYARAKAT 3T';
+  static const String _fullSubtitle =
+      'Sistem Pelayanan Terpadu & Tanggap Darurat';
+
   late final AnimationController _inController;
   late final Animation<double> _inAnimation;
 
@@ -18,17 +23,16 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _outAnimation;
   late final Animation<Offset> _outSlideAnimation;
 
-  // Title fade-in animation, which appears as the G is nearly complete
-  late final Animation<double> _titleFadeAnimation;
+  late final AnimationController _cursorBlinkController;
 
   @override
   void initState() {
     super.initState();
 
-    // 1. Entrance animation (Head moves along path from top-right to center)
+    // 1. Entrance animation (G forms & text types in)
     _inController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 2100),
     );
 
     _inAnimation = CurvedAnimation(
@@ -36,15 +40,10 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeInOutCubic,
     );
 
-    _titleFadeAnimation = CurvedAnimation(
-      parent: _inController,
-      curve: const Interval(0.65, 1.0, curve: Curves.easeOut),
-    );
-
-    // 2. Exit animation (Retraces path in reverse from center outwards, un-drawing the G)
+    // 2. Exit animation (G un-draws in reverse & text backspaces out)
     _outController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1300),
+      duration: const Duration(milliseconds: 1400),
     );
 
     _outAnimation = CurvedAnimation(
@@ -52,16 +51,21 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeInOutCubic,
     );
 
-    // Subtle downward drift during exit
     _outSlideAnimation = Tween<Offset>(
       begin: Offset.zero,
-      end: const Offset(0.0, 0.12),
+      end: const Offset(0.0, 0.10),
     ).animate(
       CurvedAnimation(
         parent: _outController,
         curve: Curves.easeInOutCubic,
       ),
     );
+
+    // 3. Cursor blinking animation during the resting / hold phase
+    _cursorBlinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    )..repeat(reverse: true);
 
     _inController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -80,8 +84,8 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _onEntranceCompleted() async {
-    // Brief hold to display the fully formed G mark and identity
-    await Future.delayed(const Duration(milliseconds: 650));
+    // Brief hold so the user can clearly read the fully typed text
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
     // Start reverse exit animation
@@ -107,12 +111,12 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _inController.dispose();
     _outController.dispose();
+    _cursorBlinkController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Solid dark slate background (strictly no gradient, no purple)
     const backgroundColor = Color(0xFF0F172A);
 
     return Scaffold(
@@ -120,7 +124,6 @@ class _SplashScreenState extends State<SplashScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            // Centered G animation and branding
             Center(
               child: SlideTransition(
                 position: _outSlideAnimation,
@@ -146,73 +149,140 @@ class _SplashScreenState extends State<SplashScreen>
                         );
                       },
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 32),
 
-                    // Text & metadata that fades in on entrance, fades out on exit
+                    // Typewriter Section (Types in on entrance, backspaces on exit)
                     AnimatedBuilder(
                       animation: Listenable.merge([
-                        _titleFadeAnimation,
+                        _inAnimation,
                         _outAnimation,
+                        _cursorBlinkController,
                       ]),
                       builder: (context, child) {
-                        final inOpacity = _titleFadeAnimation.value;
-                        final outOpacity = (1.0 - _outAnimation.value).clamp(0.0, 1.0);
-                        final effectiveOpacity = (inOpacity * outOpacity).clamp(0.0, 1.0);
+                        final inVal = _inAnimation.value;
+                        final outVal = _outAnimation.value;
+                        final isExiting = outVal > 0.0;
 
-                        return Opacity(
-                          opacity: effectiveOpacity,
-                          child: child,
+                        double titleProgress = 0.0;
+                        double subtitleProgress = 0.0;
+                        double badgeOpacity = 0.0;
+
+                        bool showTitleCursor = false;
+                        bool showSubtitleCursor = false;
+
+                        if (!isExiting) {
+                          // --- ENTRANCE (Type in) ---
+                          // Title types in from 30% to 75% of entrance duration
+                          titleProgress = ((inVal - 0.30) / 0.45).clamp(0.0, 1.0);
+                          // Subtitle types in from 65% to 95% of entrance duration
+                          subtitleProgress =
+                              ((inVal - 0.65) / 0.30).clamp(0.0, 1.0);
+                          // Badge fades in at 90% to 100%
+                          badgeOpacity = ((inVal - 0.90) / 0.10).clamp(0.0, 1.0);
+
+                          if (titleProgress > 0.0 && titleProgress < 1.0) {
+                            showTitleCursor = true;
+                          } else if (subtitleProgress > 0.0 &&
+                              subtitleProgress < 1.0) {
+                            showSubtitleCursor = true;
+                          } else if (inVal >= 1.0) {
+                            // During resting hold, cursor gently blinks on subtitle
+                            showSubtitleCursor = true;
+                          }
+                        } else {
+                          // --- EXIT (Backspacing character-by-character) ---
+                          // Badge fades out immediately (0.0 to 0.15)
+                          badgeOpacity = (1.0 - (outVal / 0.15)).clamp(0.0, 1.0);
+
+                          // Subtitle backspaces from 0.05 to 0.48
+                          subtitleProgress =
+                              (1.0 - ((outVal - 0.05) / 0.43)).clamp(0.0, 1.0);
+
+                          // Title backspaces from 0.45 to 0.90
+                          titleProgress =
+                              (1.0 - ((outVal - 0.45) / 0.45)).clamp(0.0, 1.0);
+
+                          if (subtitleProgress > 0.0) {
+                            showSubtitleCursor = true;
+                          } else if (titleProgress > 0.0) {
+                            showTitleCursor = true;
+                          }
+                        }
+
+                        // Cursor visibility: solid while typing/deleting, blinks during hold
+                        final bool isBlinkingPhase = inVal >= 1.0 && !isExiting;
+                        final bool cursorVisible = isBlinkingPhase
+                            ? _cursorBlinkController.value > 0.5
+                            : true;
+
+                        return Column(
+                          children: [
+                            // 1. Main Title with typewriter effect
+                            TypewriterText(
+                              text: _fullTitle,
+                              progress: titleProgress,
+                              containerHeight: 28,
+                              style: const TextStyle(
+                                color: Color(0xFFF8FAFC),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2.5,
+                              ),
+                              showCursor: showTitleCursor,
+                              cursorColor: const Color(0xFFF8FAFC),
+                              cursorHeight: 18,
+                              cursorVisible: cursorVisible,
+                            ),
+                            const SizedBox(height: 6),
+
+                            // 2. Subtitle with typewriter effect
+                            TypewriterText(
+                              text: _fullSubtitle,
+                              progress: subtitleProgress,
+                              containerHeight: 20,
+                              style: const TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                letterSpacing: 0.3,
+                              ),
+                              showCursor: showSubtitleCursor,
+                              cursorColor: const Color(0xFF94A3B8),
+                              cursorHeight: 13,
+                              cursorVisible: cursorVisible,
+                            ),
+                            const SizedBox(height: 20),
+
+                            // 3. Civic badge (no green dots)
+                            Opacity(
+                              opacity: badgeOpacity,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFF334155),
+                                    width: 1.0,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'TERDEPAN • TERLUAR • TERTINGGAL',
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       },
-                      child: Column(
-                        children: [
-                          const Text(
-                            'LAYANAN MASYARAKAT 3T',
-                            style: TextStyle(
-                              color: Color(0xFFF8FAFC),
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 2.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Sistem Pelayanan Terpadu & Tanggap Darurat',
-                            style: TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Clean, professional civic badge (strictly no green dots!)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: const Color(0xFF334155),
-                                width: 1.0,
-                              ),
-                            ),
-                            child: const Text(
-                              'TERDEPAN • TERLUAR • TERTINGGAL',
-                              style: TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
